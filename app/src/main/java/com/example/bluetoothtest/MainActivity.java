@@ -59,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
 
     private Handler handler; // handler that gets info from Bluetooth service
 
+
+    private final static int payloadSize = 11;
+
     private interface MessageConstants {
         public static final int MESSAGE_READ = 0;
         public static final int MESSAGE_WRITE = 1;
@@ -91,9 +94,25 @@ public class MainActivity extends AppCompatActivity {
 
         handler = new Handler(Looper.getMainLooper()) {
             @Override
-            public void handleMessage(@NonNull Message msg) {
-                super.handleMessage(msg);
-                mPairedTv.setText(mPairedTv.getText() + "\n" + msg.toString());
+            public void handleMessage(@NonNull Message message) {
+//                super.handleMessage(message);
+
+                Log.d(TAG, "handleMessage: message what : " + message.what );
+                Log.d(TAG, "handleMessage: message obj : " + message.obj );
+
+                if(message.what == 0) {
+                    byte[] bytes = (byte[]) message.obj;
+                    try {
+                        ScaleReading scaleReading = HiweighScaleProcessor.getInstance().constructReading(bytes);
+                        Log.d(TAG, "handleMessage: " + scaleReading);
+//                        getBroadcastIntent().putScaleReading(scaleReading).sendBroadcast();
+                    } catch (HiweighScaleProcessor.HiweighScaleException e) {
+                        Log.e(TAG, "Error processing reading", e);
+                    }
+                }
+
+                mPairedTv.setText(mPairedTv.getText() + "\n" + message.what);
+                mPairedTv.setText(mPairedTv.getText() + "\n" + message.obj);
                 mScrollView.post(new Runnable() {
                     @Override
                     public void run() {
@@ -191,78 +210,80 @@ public class MainActivity extends AppCompatActivity {
                     mCustomAdapter.notifyDataSetChanged();
                 } else {
 
-                    // scan available devices
 
-                    mScanBtn.setOnClickListener(new View.OnClickListener() {
-                        @Override
-                        public void onClick(View view) {
+                }
+            }
+        });
+
+        // scan available devices
+
+        mScanBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
 //                mPairedTv.setText("Scanning Available Devices...");
 
-                            AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
-                            LayoutInflater inflater = getLayoutInflater();
-                            View convertView = inflater.inflate(R.layout.listview, null);
-                            alertDialog.setView(convertView);
-                            alertDialog.setTitle("Scanning");
-                            ListView lv = convertView.findViewById(R.id.listView1);
+                AlertDialog.Builder alertDialog = new AlertDialog.Builder(MainActivity.this);
+                LayoutInflater inflater = getLayoutInflater();
+                View convertView = inflater.inflate(R.layout.listview, null);
+                alertDialog.setView(convertView);
+                alertDialog.setTitle("Scanning");
+                ListView lv = convertView.findViewById(R.id.listView1);
 
-                            lv.setAdapter(mCustomAdapter);
-                            mAlertDialog = alertDialog.show();
+                lv.setAdapter(mCustomAdapter);
+                mAlertDialog = alertDialog.show();
 
-                            mBlueAdapter.startDiscovery();
-                            mReceiver = new BroadcastReceiver() {
-                                public void onReceive(Context context, Intent intent) {
-                                    String action = intent.getAction();
+                mBlueAdapter.startDiscovery();
+                mReceiver = new BroadcastReceiver() {
+                    public void onReceive(Context context, Intent intent) {
+                        String action = intent.getAction();
 
-                                    //Finding devices
-                                    if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-                                        Log.d(TAG, "onReceive: just got something");
-                                        // Get the BluetoothDevice object from the Intent
-                                        BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                        //Finding devices
+                        if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+                            Log.d(TAG, "onReceive: just got something");
+                            // Get the BluetoothDevice object from the Intent
+                            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
 
-                                        if (device != null) {
+                            if (device != null) {
 
-                                            mAvailableDevices.add(device);
+                                mAvailableDevices.add(device);
 //                                mPairedTv.setText(mPairedTv.getText() +  "\n\n" + device.getName() + "\n" + device.getAddress());
 
-                                            mCustomAdapter.loadItems(mAvailableDevices);
-                                            mCustomAdapter.notifyDataSetChanged();
+                                mCustomAdapter.loadItems(mAvailableDevices);
+                                mCustomAdapter.notifyDataSetChanged();
 
-                                            Log.d(TAG, "onReceive: " + device.getName());
-                                            Log.d(TAG, "onReceive: " + device.getAddress());
+                                Log.d(TAG, "onReceive: " + device.getName());
+                                Log.d(TAG, "onReceive: " + device.getAddress());
 
-                                        }
-                                    }
-                                }
-
-                            };
-
-                            IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
-                            registerReceiver(mReceiver, filter);
-
-
-                            mPairReceiver = new BroadcastReceiver() {
-                                public void onReceive(Context context, Intent intent) {
-                                    String action = intent.getAction();
-
-                                    if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
-                                        final int state = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR);
-                                        final int prevState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR);
-
-                                        if (state == BluetoothDevice.BOND_BONDED && prevState == BluetoothDevice.BOND_BONDING) {
-                                            showToast("Paired");
-                                        } else if (state == BluetoothDevice.BOND_NONE && prevState == BluetoothDevice.BOND_BONDED) {
-                                            showToast("Unpaired");
-                                        }
-
-                                    }
-                                }
-                            };
-
-                            IntentFilter intent = new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
-                            registerReceiver(mPairReceiver, intent);
+                            }
                         }
-                    });
-                }
+                    }
+
+                };
+
+                IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+                registerReceiver(mReceiver, filter);
+
+
+                mPairReceiver = new BroadcastReceiver() {
+                    public void onReceive(Context context, Intent intent) {
+                        String action = intent.getAction();
+
+                        if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
+                            final int state = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR);
+                            final int prevState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR);
+
+                            if (state == BluetoothDevice.BOND_BONDED && prevState == BluetoothDevice.BOND_BONDING) {
+                                showToast("Paired");
+                            } else if (state == BluetoothDevice.BOND_NONE && prevState == BluetoothDevice.BOND_BONDED) {
+                                showToast("Unpaired");
+                            }
+
+                        }
+                    }
+                };
+
+                IntentFilter intent = new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+                registerReceiver(mPairReceiver, intent);
             }
         });
     }
@@ -423,6 +444,7 @@ public class MainActivity extends AppCompatActivity {
             // Keep listening to the InputStream until an exception occurs.
             while (true) {
                 try {
+                    Log.d(TAG, "run: am reading");
                     // Read from the InputStream.
                     numBytes = mmInStream.read(mmBuffer);
                     Log.d(TAG, "run: numBytes : " + numBytes);
@@ -431,6 +453,45 @@ public class MainActivity extends AppCompatActivity {
                             MainActivity.MessageConstants.MESSAGE_READ, numBytes, -1,
                             mmBuffer);
                     readMsg.sendToTarget();
+
+//                    byte[] payload = new byte[payloadSize];
+//
+//                    int readingMarker = mmInStream.read();
+//
+//                    Log.d(TAG, "run: readingMarker : " + readingMarker);
+//
+//                    if (readingMarker == 2) {
+//                        // initial byte of `2` indicates that we have a valid reading
+//                        payload[0] = (byte)readingMarker;
+//                    } else {
+//                        continue;
+//                    }
+//
+//                    // we have already read the first byte from the stream
+//                    // need to read the next 10 (11-1)
+//                    int offset = 1;
+//                    // read from stream until we have filled the buffer
+//                    while (offset < payloadSize) {
+//                        int bytesRead = mmInStream.read(payload, offset, payloadSize - offset);
+//                        offset += bytesRead;
+//                    }
+//
+//                    if (payload.length != payloadSize || payload[payloadSize-1] != 13) {
+//                        // not a valid result (must have correct length and last byte must be `13`
+//                        continue;
+//                    }
+//
+//
+////                    ScaleReading scaleReading = HiweighScaleProcessor.getInstance().constructReading(bytes);
+////                    Log.d(TAG, "handleMessage: " + scaleReading);
+//
+//                    Log.d(TAG, "run: finished reading");
+//
+//                    Message readMsg = handler.obtainMessage(
+//                            MainActivity.MessageConstants.MESSAGE_READ, payload);
+//                    readMsg.sendToTarget();
+
+//                    this.bluetoothService.getHandler().obtainMessage(BluetoothService.CODE_READING_MESSAGE, payload).sendToTarget();
                 } catch (IOException e) {
                     Log.d(TAG, "Input stream was disconnected", e);
                     break;
